@@ -874,7 +874,10 @@ def setup_event_simulator(
 
     # SIREN config: model path + ray-sampling knobs. The s/s_max-trained net carries its
     # own count/range model (nphot/smax) in the trained-model metadata, read in the context.
-    siren_cfg = unpack_siren_params(particle, material)
+    # Only track mode emits through SIREN; calibration and data modes take their photons from
+    # the source or the ROOT file, so a material without SIREN files still runs them.
+    siren_cfg = (None if (sim_config.is_data or sim_config.is_calibration)
+                 else unpack_siren_params(particle, material))
 
     # ---- Track-mode emission-process dispatch (refactor-v2 wbls/scint merge) ----
     # The medium's `emission_processes` tuple decides which surrogates run. The
