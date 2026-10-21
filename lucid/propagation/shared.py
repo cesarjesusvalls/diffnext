@@ -16,6 +16,9 @@ import numpy as np
 
 from lucid.propagation.base import (
     compute_sensor_intersections_base,
+    compute_flat_sensor_intersections,
+    flat_footprint_distance,
+    _surface_frame,
     process_intersection_normals,
     find_closest_sensors,
 )
@@ -153,10 +156,71 @@ def validate_sensor_map(assignments_geometric, inverted_sensor_map, num_sensors,
             f"max_candidates_per_ray={max_candidates_per_ray} overflow.")
 
 
+def flat_sensor_normals(detector, sensor_positions):
+    """Outward surface normal of each flat sensor.
+
+    A flat sensor faces into the detector, so its outward normal is the opposite of its viewing
+    direction when the detector carries those (``Cylinder.from_pmt_file`` keeps the npz
+    ``directions`` as ``pmt_directions``). Otherwise it comes from a ray cast from the detector
+    centre to the sensor centre (the surface detectors are convex, so the ray reaches every
+    surface point), which needs the centre to lie on the surface: a disc whose centre is past a
+    cap's rim would get the barrel's normal.
+    """
+    dirs = getattr(detector, 'pmt_directions', None)
+    if dirs is not None:
+        d = jnp.asarray(dirs, dtype=jnp.float32)
+        return -d / jnp.linalg.norm(d, axis=1, keepdims=True)
+    pos = jnp.asarray(sensor_positions, dtype=jnp.float32)
+    dirs = pos / (jnp.linalg.norm(pos, axis=1, keepdims=True) + 1e-12)
+    ip, _, _, surf = detector.intersect_ray(jnp.zeros_like(pos), dirs)
+    return detector.compute_normal(ip, surf)
+
+
+def validate_flat_sensor_coverage(detector, sensor_positions, sensor_model,
+                                  inverted_sensor_map, n_grid=9):
+    """Check that the cell lookup offers every flat sensor wherever a photon can land on it.
+
+    Runs at propagator build time. A sensor larger than a cell (a PMT window on a grid sized by
+    SiPMs) is assigned geometrically to a few cells only and relies on the closest-sensor
+    fallback for the rest; this checks that it is there. Samples an ``n_grid`` x ``n_grid``
+    lattice over every footprint, casts a ray from the detector centre through each sample (the
+    surface detectors are convex, so every surface point is reached), and wherever the landing
+    point falls inside the sensor requires the sensor among the candidates of its cell. Raises
+    ValueError otherwise: the sensor would silently lose that part of its area.
+    """
+    pos = jnp.asarray(sensor_positions, dtype=jnp.float32)
+    n = pos.shape[0]
+    u, v = _surface_frame(sensor_model.normal)
+    g = (jnp.arange(n_grid) + 0.5) / n_grid * 2.0 - 1.0
+    a, b = [x.ravel() for x in jnp.meshgrid(g, g, indexing='ij')]
+    half = sensor_model.half_size[:, None, None]
+    samples = pos[:, None, :] + half * (a[None, :, None] * u[:, None, :]
+                                        + b[None, :, None] * v[:, None, :])
+    samples = samples.reshape(-1, 3)
+    owner = jnp.repeat(jnp.arange(n), a.shape[0])
+    dirs = samples / (jnp.linalg.norm(samples, axis=1, keepdims=True) + 1e-12)
+    land, _, grid_info, surf = detector.intersect_ray(jnp.zeros_like(samples), dirs)
+    x, coplanar = flat_footprint_distance(
+        land, detector.compute_normal(land, surf), pos[owner],
+        sensor_model.is_disc[owner], sensor_model.half_size[owner], sensor_model.normal[owner])
+    on_sensor = np.asarray(coplanar & (x < 1.0))
+    cells = np.asarray(detector.point_to_grid_cell(grid_info))
+    offered = np.any(np.asarray(inverted_sensor_map)[cells] == np.asarray(owner)[:, None], axis=1)
+    missed = on_sensor & ~offered
+    if missed.any():
+        bad = np.unique(np.asarray(owner)[missed])
+        raise ValueError(
+            f"Flat sensors: {int(missed.sum())} of {int(on_sensor.sum())} sampled footprint "
+            f"points, on {len(bad)} sensors (e.g. {bad[:5].tolist()}), land in cells whose "
+            "candidates do not include the sensor. Raise max_candidates_per_ray or the npz "
+            "sensor_radius.")
+
+
 def create_propagator(detector, sensor_positions, sensor_radius,
                       temperature=0.2, max_candidates_per_ray=4,
                       overlap_st_width_frac=0.35, overlap_renorm=1.0,
                       overlap_mode='interp', deposit_leg_bound=False,
+                      sensor_model=None,
                       **grid_params):
     """Build a JIT-compiled photon propagator using detector methods.
 
@@ -185,6 +249,16 @@ def create_propagator(detector, sensor_positions, sensor_radius,
         sensor radius of sensors displaced along the wall from the landing point, over-counting
         hits by (1 - cos theta)/2 per ray. Normal incidence is unaffected. Switching it on
         changes the forward model, and with it any energy scale calibrated without it.
+    sensor_model : FlatSensorModel or None
+        None (default) keeps the spherical sensor of ``sensor_radius`` centred on the wall.
+        A :class:`lucid.propagation.base.FlatSensorModel` makes every sensor a flat pad in the
+        surface (a square or a disc, each its own size), hit iff the photon's landing point
+        falls inside it, so it collects ``area * cos(theta)``. Its deposit is always the hard
+        step: ``temperature`` and the soft-overlap options apply to the spherical model only.
+        ``sensor_radius`` still sizes the cell assignment; sensors larger than that are found
+        through the closest-sensor fallback, which :func:`validate_flat_sensor_coverage`
+        checks at build time. A Python-level choice made at trace time, so the default graph
+        is unchanged.
     max_candidates_per_ray : int
     **grid_params
         Geometry-specific grid parameters passed to ``detector.configure_grid()``.
@@ -237,6 +311,15 @@ def create_propagator(detector, sensor_positions, sensor_radius,
             temperature * sensor_radius, sensor_radius,
             st_width_frac=overlap_st_width_frac, renorm=overlap_renorm, mode=overlap_mode)
 
+    # 5b. Flat sensors: every footprint reachable through the lookup; a hard step at the
+    # pad edge, on the distance normalised by each pad's half size.
+    if sensor_model is not None:
+        sensor_model = sensor_model._replace(
+            normal=flat_sensor_normals(detector, sensor_positions))
+        validate_flat_sensor_coverage(detector, sensor_positions, sensor_model,
+                                      inverted_sensor_map)
+        flat_overlap_prob = create_overlap_prob(None, 1.0, st_width_frac=overlap_st_width_frac)
+
     # 6. Bounds check closure
     def bounds_check(positions):
         return detector.bounds_check(positions)
@@ -272,13 +355,21 @@ def create_propagator(detector, sensor_positions, sensor_radius,
         potential_sensors = jax.lax.stop_gradient(inverted_sensor_map[idx])
 
         # d. Compute sensor intersections (shared, vmapped over sensor slots)
-        def compute_for_slot(slot_sensors):
-            return compute_sensor_intersections_base(
-                slot_sensors, sensor_positions, sensor_radius,
-                photon_origins, photon_directions,
-                bounds_check, overlap_prob,
-                # None when off drops the leg-bound code from the trace; see `deposit_leg_bound`.
-                t_geometry=t_geometry if deposit_leg_bound else None)
+        if sensor_model is None:
+            def compute_for_slot(slot_sensors):
+                return compute_sensor_intersections_base(
+                    slot_sensors, sensor_positions, sensor_radius,
+                    photon_origins, photon_directions,
+                    bounds_check, overlap_prob,
+                    # None when off drops the leg-bound code from the trace; see `deposit_leg_bound`.
+                    t_geometry=t_geometry if deposit_leg_bound else None)
+        else:
+            landing_normals = detector.compute_normal(intersection_point, surface_info)
+
+            def compute_for_slot(slot_sensors):
+                return compute_flat_sensor_intersections(
+                    slot_sensors, sensor_positions, photon_origins, photon_directions,
+                    intersection_point, landing_normals, sensor_model, flat_overlap_prob)
 
         (weights, sensor_times, sensor_indices,
          sensor_normals_all, inside_sensor,

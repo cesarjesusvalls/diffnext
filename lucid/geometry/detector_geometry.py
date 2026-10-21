@@ -68,6 +68,11 @@ class DetectorGeometry(NamedTuple):
             Sphere: n_divisions.
             Box: n_x, n_y, n_z.
             If not provided, auto-derived from detector geometry.
+
+        The geometry JSON may carry ``geometry_definitions.sensor_model`` to make the sensors
+        flat pads instead of spheres: ``shape`` and ``half_size`` (m) for every sensor, or
+        ``per_sensor: true`` for per-sensor arrays in the npz; see
+        :class:`lucid.propagation.base.FlatSensorModel`.
         """
         # Normalize casing. 'string' = telescope / volume detector (IceCube-style).
         dt_key = detector_type.lower()
@@ -84,7 +89,12 @@ class DetectorGeometry(NamedTuple):
         detector = generate_detector(json_filename)
         import json as _json
         with open(json_filename) as _f:
-            actual_type = _json.load(_f).get('detector_type', detector_type)
+            _cfg = _json.load(_f)
+        actual_type = _cfg.get('detector_type', detector_type)
+        # Optional flat-sensor model (SiPM-like pads); absent -> spherical sensors.
+        from lucid.propagation.base import make_flat_sensor_model
+        sensor_model = make_flat_sensor_model(
+            _cfg.get('geometry_definitions', {}).get('sensor_model'), detector)
         sensor_points = jnp.array(detector.all_points)
         sensor_radius = detector.S_radius
         num_sensors = len(sensor_points)
@@ -93,6 +103,10 @@ class DetectorGeometry(NamedTuple):
         # surface detectors (cylinder/sphere/box) use the shared grid propagator.
         from lucid.geometry.string import StringTelescope
         if isinstance(detector, StringTelescope):
+            if sensor_model is not None:
+                raise ValueError(
+                    f"{json_filename}: sensor_model applies to surface detectors only, "
+                    "not to a string telescope.")
             from lucid.propagation.string.string_propagator import create_string_propagator
             propagator = create_string_propagator(
                 detector, sensor_radius, temperature=temperature,
@@ -106,6 +120,7 @@ class DetectorGeometry(NamedTuple):
                 overlap_renorm=overlap_renorm,
                 overlap_mode=overlap_mode,
                 deposit_leg_bound=deposit_leg_bound,
+                sensor_model=sensor_model,
                 **grid_params)
 
         return DetectorGeometry(

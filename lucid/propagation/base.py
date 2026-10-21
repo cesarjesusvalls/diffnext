@@ -4,7 +4,9 @@ Base functionality shared across all detector geometries for photon propagation.
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from functools import partial
+from typing import NamedTuple, Optional
 from jax import lax
 from ..overlap import create_overlap_prob
 
@@ -329,6 +331,142 @@ def compute_sensor_intersections_base(sensor_idx, sensor_positions, sensor_radiu
 
     # In principle we should not be using anything if intersects_and_inside is false, reflecting instead out of the detector surface.
     return weights, times, sensor_idx, normals, intersects_and_inside, points
+
+
+class FlatSensorModel(NamedTuple):
+    """Flat sensors lying in the detector surface: SiPM-like squares, window-like discs.
+
+    The default sensor is a sphere of ``sensor_radius`` centred on the wall: it takes any ray
+    whose line passes within that radius of the centre, so its cross-section is the same at
+    every incidence angle. A flat pad collects ``area * cos(theta)`` instead. This model tests
+    where the photon actually lands on the surface.
+
+    Fields (one entry per sensor, in ``all_points`` order)
+    ------
+    is_disc : (n_sensors,) bool
+        Disc (True) or square (False). Square sides run along the in-surface frame of
+        :func:`compute_flat_sensor_intersections` (x and y on a cylinder cap).
+    half_size : (n_sensors,) float
+        Half side (square) or radius (disc) of the sensitive area, m.
+    normal : (n_sensors, 3) float or None
+        Outward surface normal at each sensor. ``create_propagator`` fills it from the
+        geometry; a photon is only offered to sensors whose surface faces the same way as the
+        surface it landed on.
+    """
+    is_disc: jnp.ndarray
+    half_size: jnp.ndarray
+    normal: Optional[jnp.ndarray] = None
+
+
+def make_flat_sensor_model(spec: Optional[dict], detector) -> Optional[FlatSensorModel]:
+    """Build a :class:`FlatSensorModel` from a geometry config's ``sensor_model`` block.
+
+    ``None`` (no block) returns None: the spherical sensor model. The block gives either
+    ``shape`` (``'square'`` or ``'disc'``) and ``half_size`` (m) for every sensor, or
+    ``per_sensor: true`` to read the per-sensor arrays ``sensor_shape`` and
+    ``sensor_half_size`` of the detector's ``.npz`` (``Cylinder.from_pmt_file`` attaches them
+    in ``all_points`` order).
+    """
+    if spec is None:
+        return None
+    n = len(detector.all_points)
+    if spec.get('per_sensor', False):
+        if set(spec) != {'per_sensor'}:
+            raise ValueError("sensor_model: 'per_sensor' takes no other keys; the shapes and "
+                             "sizes come from the npz arrays sensor_shape / sensor_half_size")
+        missing = [k for k in ('sensor_shape', 'sensor_half_size') if not hasattr(detector, k)]
+        if missing:
+            raise ValueError(f"sensor_model.per_sensor needs the npz arrays {missing}")
+        shapes = np.asarray(detector.sensor_shape).astype(str)
+        half = np.asarray(detector.sensor_half_size, dtype=float)
+    else:
+        unknown = set(spec) - {'shape', 'half_size'}
+        if unknown:
+            raise ValueError(f"sensor_model: unknown keys {sorted(unknown)}")
+        shapes = np.full(n, spec.get('shape', 'square'))
+        half = np.full(n, float(spec['half_size']))
+    if shapes.shape != (n,) or half.shape != (n,):
+        raise ValueError(f"sensor_model: need one shape and size per sensor ({n})")
+    bad = sorted(set(shapes) - {'square', 'disc'})
+    if bad:
+        raise ValueError(f"sensor_model: shapes must be 'square' or 'disc', got {bad}")
+    if not np.all(half > 0.0):
+        raise ValueError("sensor_model: every half_size must be > 0")
+    return FlatSensorModel(jnp.asarray(shapes == 'disc'), jnp.asarray(half, dtype=jnp.float32))
+
+
+def _surface_frame(n):
+    """In-surface frame (u, v) at outward unit normals ``n`` (N, 3).
+
+    Any orthonormal pair serves a disc; for a square it fixes the side directions. The
+    reference axis is z unless the surface is horizontal, then x: on a cylinder cap u, v run
+    along y and x, on the barrel along the tangent and z.
+    """
+    ref = jnp.where(jnp.abs(n[:, 2:3]) < 0.9, jnp.array([0.0, 0.0, 1.0]),
+                    jnp.array([1.0, 0.0, 0.0]))
+    u = jnp.cross(ref, n)
+    u = u / jnp.sqrt(jnp.sum(u ** 2, axis=1, keepdims=True) + 1e-24)
+    return u, jnp.cross(n, u)
+
+
+def flat_footprint_distance(points, normals, centers, is_disc, half_size, sensor_normals):
+    """Where ``points`` (on the surface, outward ``normals``) fall relative to flat sensors.
+
+    Returns ``(x, coplanar)``: ``x`` is the in-surface distance to the sensor centre in units
+    of its half size (the L-inf distance for a square, so ``x < 1`` is inside either shape), and
+    ``coplanar`` says the sensor lies in the surface at the point. The candidates of a cell near
+    an edge include sensors of the adjacent surface, and the distance fallback fills empty slots
+    with far sensors, so the sensor's surface must face the same way as the point's (to within
+    ~25 deg, far above the turn of a curved wall under a pad, far below the 90 deg between a
+    barrel and a cap) and lie within half the pad size of the point's plane (above the sag of a
+    curved wall under a pad, ~half_size^2 / 2R).
+    """
+    u, v = _surface_frame(normals)
+    delta = points - centers
+    du = jnp.sum(delta * u, axis=1)
+    dv = jnp.sum(delta * v, axis=1)
+    dn = jnp.sum(delta * normals, axis=1)
+    d = jnp.where(is_disc, jnp.sqrt(du ** 2 + dv ** 2 + 1e-24),
+                  jnp.maximum(jnp.abs(du), jnp.abs(dv)))
+    same_face = jnp.sum(normals * sensor_normals, axis=1) > 0.9
+    return d / half_size, same_face & (jnp.abs(dn) < 0.5 * half_size)
+
+
+def compute_flat_sensor_intersections(sensor_idx, sensor_positions, ray_origins,
+                                      ray_directions, landing_points, surface_normals,
+                                      sensor_model, overlap_prob):
+    """Flat-sensor counterpart of :func:`compute_sensor_intersections_base`.
+
+    Same per-slot return tuple, ``(weights, times, sensor_idx, normals, inside_sensor,
+    points)``, with the same shapes. The photon lands on the surface at ``landing_points``
+    (outward normal ``surface_normals``); candidate sensor ``C`` takes it iff ``C`` lies in
+    that surface and the landing point falls inside its square or disc.
+
+    Parameters
+    ----------
+    sensor_idx : (N,) int, candidate sensor per ray, -1 for an empty slot
+    sensor_positions : (n_sensors, 3) sensor centres, in the detector surface
+    ray_origins, ray_directions : (N, 3)
+    landing_points : (N, 3) where each ray meets the detector surface
+    surface_normals : (N, 3) outward unit normals there
+    sensor_model : FlatSensorModel
+    overlap_prob : callable, the hard step at a normalised distance of 1 (forward exact; its
+        straight-through surrogate carries the gradient wrt the landing point)
+    """
+    valid = sensor_idx != -1
+    safe = jnp.where(valid, sensor_idx, 0)
+    centers = jnp.where(valid[:, None], sensor_positions[safe], jnp.zeros(3))
+    d_hat = ray_directions / (jnp.linalg.norm(ray_directions, axis=1, keepdims=True) + 1e-10)
+    x, coplanar = flat_footprint_distance(landing_points, surface_normals, centers,
+                                          sensor_model.is_disc[safe], sensor_model.half_size[safe],
+                                          sensor_model.normal[safe])
+    # Outward normal: a photon arriving at the surface from inside has d_hat . n > 0.
+    gate = valid & coplanar & (jnp.sum(d_hat * surface_normals, axis=1) > 0.0)
+    weights = jnp.where(gate, overlap_prob(x), 0.0)
+    inside = gate & (x < 1.0)
+
+    times = jnp.sqrt(jnp.sum((landing_points - ray_origins) ** 2, axis=1) + 1e-12)[:, None]
+    return weights, times, sensor_idx, surface_normals, inside, landing_points
 
 
 @partial(jax.jit, static_argnums=(1,))
