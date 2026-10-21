@@ -1,0 +1,10 @@
+{
+  "material": "gxe",
+  "detector_type": "cylinder",
+  "geometry_definitions": {
+    "npz_file_path": "next100_like_sensors.npz",
+    "sensor_model": {
+      "per_sensor": true
+    }
+  }
+}

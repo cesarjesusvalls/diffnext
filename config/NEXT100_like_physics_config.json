@@ -1,0 +1,10 @@
+{
+  "scatter_length": 1.0e9,
+  "absorption_length": 1.0e9,
+  "wall_reflection_rate": 0.94,
+  "wall_fspec": 0.0,
+  "sensor_reflection_rate": 0.0,
+  "sensor_fspec": 0.0,
+  "qe": 1.0,
+  "qe_corrections": 1.0
+}

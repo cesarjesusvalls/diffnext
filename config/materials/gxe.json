@@ -1,0 +1,6 @@
+{
+  "material": "gxe",
+  "description": "Gaseous xenon at the NEXT-100 operating point (13.5 bar, 293 K). Scalar (monochromatic) mode only: the scattering and absorption lengths come from the physics config (no wavelength blocks here). Refractive index from nexus XenonRefractiveIndex (Baldini et al., physics/0401072) at 172 nm with the nexus GXeDensity value 78.949 kg/m3; it sets the photon speed only.",
+  "refractive_index": 1.0165,
+  "speed_of_light_vacuum_m_per_ns": 0.299792
+}
