@@ -1,0 +1,435 @@
+<title>NEXT-like PMT Light</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an instrument panel. The 3D detector fills the left; the source picker, light
+   component, colour key and sums sit in a column on the right (below on phones). */
+:root {
+  --bg: #f4f4f1;
+  --surface: #fcfcfb;
+  --panel: #ffffff;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #6f6e69;
+  --line: #e1e0d9;
+  --line-strong: #c3c2b7;
+  --frame: #a9a79f;
+  --sipm: #8d8b84;
+  --source: #0b0b0b;
+  --focus: #2a78d6;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d0d0d; --surface: #1a1a19; --panel: #151514; --ink: #f0efec; --ink-2: #c3c2b7;
+    --muted: #9c9b95; --line: #2c2c2a; --line-strong: #44443f; --frame: #66655f;
+    --sipm: #77766f; --source: #f0efec; --focus: #6da7ec; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d0d0d; --surface: #1a1a19; --panel: #151514; --ink: #f0efec; --ink-2: #c3c2b7;
+  --muted: #9c9b95; --line: #2c2c2a; --line-strong: #44443f; --frame: #66655f;
+  --sipm: #77766f; --source: #f0efec; --focus: #6da7ec; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+.page {
+  max-width: 1320px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px; display: grid; gap: 22px;
+}
+header { display: grid; gap: 6px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(30px, 4.4vw, 44px); line-height: 1.05; margin: 0; letter-spacing: 0.01em; text-wrap: balance; }
+h2 { font-family: var(--font-display); font-weight: 600; font-size: 22px; margin: 0; letter-spacing: 0.02em; text-wrap: balance; }
+h3 { margin: 0; font: 600 14px/1.2 var(--font-display); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-2); }
+.dek { margin: 0; color: var(--ink-2); max-width: 72ch; }
+.workbench { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+@media (max-width: 920px) { .workbench { grid-template-columns: minmax(0, 1fr); } }
+
+.viewer { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; height: clamp(420px, 70vh, 780px); }
+#gl { display: block; width: 100%; height: 100%; touch-action: none; }
+.toolbar { position: absolute; left: 10px; top: 10px; right: 10px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 5px; overflow: hidden; background: var(--panel); pointer-events: auto; }
+.seg button { font: 500 13px/1 var(--font-body); color: var(--ink-2); background: var(--panel); border: 0; padding: 8px 11px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { color: var(--ink); background: var(--line); }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tag { position: absolute; font: 600 12px/1 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; white-space: nowrap; transform: translate(-50%, -100%); }
+.tip { position: absolute; max-width: 270px; background: var(--panel); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 5px; padding: 8px 10px; font-size: 13px; line-height: 1.45; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
+.tip .src { display: block; font: 11px/1.3 var(--font-mono); color: var(--muted); margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.05em; }
+.tip table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.tip td { padding: 0 0 0 10px; text-align: right; font-family: var(--font-mono); font-size: 12px; }
+.tip td:first-child { padding: 0; text-align: left; font-family: var(--font-body); font-size: 13px; color: var(--ink-2); }
+.status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-2); font-family: var(--font-mono); font-size: 13px; padding: 16px; text-align: center; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; display: grid; gap: 18px; }
+.picker { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
+.picker .colhead, .picker .rowhead { font: 12px/1.2 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.picker .colhead { text-align: center; padding-bottom: 2px; }
+.picker .rowhead { display: flex; align-items: center; padding-right: 6px; white-space: nowrap; }
+.picker button { font: 500 13px/1 var(--font-mono); color: var(--ink-2); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 4px; padding: 10px 0; cursor: pointer; font-variant-numeric: tabular-nums; }
+.picker button[aria-pressed="true"] { color: var(--panel); background: var(--ink); border-color: var(--ink); }
+.picker .axis { grid-column: 2 / -1; text-align: center; font: 11px/1.2 var(--font-mono); color: var(--muted); }
+.modes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.key { display: grid; gap: 6px; }
+.bar { height: 14px; border-radius: 3px; border: 1px solid var(--line); }
+.ticks { position: relative; height: 16px; font: 11px/1 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.ticks span { position: absolute; top: 2px; transform: translateX(-50%); white-space: nowrap; }
+.ticks span.first { transform: none; }
+.ticks span.last { transform: translateX(-100%); }
+.key .caption { font-size: 13px; color: var(--ink-2); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+.check input { margin: 0; width: 16px; height: 16px; accent-color: var(--ink-2); }
+.sums { border-collapse: collapse; width: 100%; font-size: 14px; }
+.sums th, .sums td { padding: 5px 0; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+.sums th:first-child, .sums td:first-child { text-align: left; }
+.sums thead th { font: 600 12px/1.2 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.sums td { font-family: var(--font-mono); font-size: 13px; }
+.sums td:first-child { font-family: var(--font-body); font-size: 14px; }
+.sums tr:last-child td { border-bottom: 0; }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+
+.notes { display: grid; gap: 10px; max-width: 78ch; }
+.notes ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--ink-2); }
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+summary { cursor: pointer; padding: 12px 14px; font: 600 15px/1.2 var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-2); }
+.table-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto; border-top: 1px solid var(--line); }
+.values { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 13px; }
+.values th, .values td { padding: 6px 12px; text-align: right; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.values thead th { position: sticky; top: 0; background: var(--surface); font: 600 12px/1.2 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.values td { font-family: var(--font-mono); }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">LUCiD · NEXT-100-like cylinder · isotropic point source · 10⁶ rays</div>
+    <h1>NEXT-like PMT Light</h1>
+    <p class="dek">How many of 10⁶ rays from a point source in the drift volume reach each PMT window. Pick a source position and a light component; hover a PMT for its numbers.</p>
+  </header>
+
+  <section class="workbench" aria-label="Detector view">
+    <div class="viewer" id="viewer">
+      <canvas id="gl" aria-label="3D view of the NEXT-like detector with the PMTs coloured by expected light"></canvas>
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="Camera">
+          <button type="button" id="v-pmt" data-view="pmt" aria-pressed="true">PMT plane</button>
+          <button type="button" id="v-whole" data-view="whole" aria-pressed="false">Whole detector</button>
+          <button type="button" id="v-above" data-view="above" aria-pressed="false">From above</button>
+        </div>
+      </div>
+      <div id="tags"></div>
+      <div class="tip" id="tip" hidden></div>
+      <div class="status" id="status">Building the detector…</div>
+    </div>
+
+    <aside class="panel" aria-label="Controls">
+      <div>
+        <h3>Source position</h3>
+        <div class="picker" id="picker" role="group" aria-label="Source position"></div>
+      </div>
+      <div>
+        <h3>Light</h3>
+        <div class="modes">
+          <div class="seg" role="group" aria-label="Light component">
+            <button type="button" id="m-direct" data-mode="direct" aria-pressed="false">Direct</button>
+            <button type="button" id="m-indirect" data-mode="indirect" aria-pressed="false">Indirect</button>
+            <button type="button" id="m-total" data-mode="total" aria-pressed="true">Total</button>
+          </div>
+        </div>
+      </div>
+      <div class="key">
+        <h3>Rays per PMT</h3>
+        <div class="bar" id="bar"></div>
+        <div class="ticks" id="ticks"></div>
+        <div class="caption" id="key-caption"></div>
+        <label class="check" for="fit"><input type="checkbox" id="fit"> Fit the scale to this position</label>
+      </div>
+      <div>
+        <h3>Sums for this position</h3>
+        <table class="sums" aria-label="Expected rays summed over sensors">
+          <thead><tr><th scope="col"></th><th scope="col">Direct</th><th scope="col">Indirect</th><th scope="col">Total</th></tr></thead>
+          <tbody>
+            <tr><td id="n-pmt">PMTs</td><td id="s-pd"></td><td id="s-pi"></td><td id="s-pt"></td></tr>
+            <tr><td id="n-sipm">SiPMs</td><td id="s-sd"></td><td id="s-si"></td><td id="s-st"></td></tr>
+          </tbody>
+        </table>
+        <p class="note">Rays of the 10⁶ emitted.</p>
+      </div>
+    </aside>
+  </section>
+
+  <section class="notes" aria-label="Model">
+    <h2>What is being computed</h2>
+    <ul>
+      <li>Geometry: a cylinder of radius 491.65 mm, 1482.8 mm from the SiPM plane to the PMT windows. The 3130 SiPMs (1.3 mm squares) and 60 PMT windows (80 mm discs) sit at their NEXT-100 positions; the windows on the rim can only be hit on their inner part. The cathode mesh is not modelled.</li>
+      <li>Optics: every wall reflects 94% of the light, diffusely. SiPMs and PMT windows absorb every ray that reaches them. The gas neither scatters nor absorbs.</li>
+      <li>Direct is the first leg of each ray; total follows each ray through up to 200 reflections; indirect is total minus direct. Each source emits 10⁶ rays on a Fibonacci lattice.</li>
+      <li>Source positions are measured from the gate towards the cathode (at 1.19 m), and x from the light-tube axis, with y = 0.</li>
+    </ul>
+  </section>
+
+  <details>
+    <summary>Values per PMT for this position</summary>
+    <div class="table-wrap">
+      <table class="values" aria-label="Expected rays per PMT">
+        <thead><tr><th scope="col">PMT</th><th scope="col">x (mm)</th><th scope="col">y (mm)</th><th scope="col">Direct</th><th scope="col">Indirect</th><th scope="col">Total</th></tr></thead>
+        <tbody id="values"></tbody>
+      </table>
+    </div>
+  </details>
+</div>
+
+<script type="application/json" id="data">__DATA__</script>
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const $ = (id) => document.getElementById(id);
+const D = JSON.parse($('data').textContent);
+const MODES = ['direct', 'indirect', 'total'];
+// Sequential one-hue ramp, light -> dark; dark mode runs it dark -> light so near-zero recedes.
+const RAMP = ['#cde2fb', '#b7d3f6', '#9ec5f4', '#86b6ef', '#6da7ec', '#5598e7', '#3987e5',
+  '#2a78d6', '#256abf', '#1c5cab', '#184f95', '#104281', '#0d366b'];
+const fmt = (v) => Math.round(v).toLocaleString('en-US');
+const token = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const isDark = () => {
+  const t = document.documentElement.getAttribute('data-theme');
+  return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+};
+
+let state = { pos: 4, mode: 'total', fit: false };
+const R = D.radius_mm, H = D.height_mm, zTop = H / 2, zBot = -H / 2;
+
+// ---------- scene: LUCiD frame in mm, shown with the SiPM plane on the left ----------
+const viewer = $('viewer'), canvas = $('gl'), tip = $('tip');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+const scene = new THREE.Scene();
+const world = new THREE.Group(); world.rotation.y = -Math.PI / 2; scene.add(world);  // (x,y,z) -> (-z, y, x)
+const camera = new THREE.PerspectiveCamera(30, 1, 1, 50000);
+const controls = new OrbitControls(camera, canvas); controls.enableDamping = true;
+const themed = [];   // [material, css token]
+const lineMat = (tok, opacity, dashed) => {
+  const m = dashed ? new THREE.LineDashedMaterial({ dashSize: 18, gapSize: 12, transparent: true, opacity })
+                   : new THREE.LineBasicMaterial({ transparent: true, opacity });
+  themed.push([m, tok]); return m;
+};
+const circle = (r, z, seg = 180) => {
+  const p = [];
+  for (let i = 0; i <= seg; i++) { const a = (2 * Math.PI * i) / seg; p.push(new THREE.Vector3(r * Math.cos(a), r * Math.sin(a), z)); }
+  return new THREE.BufferGeometry().setFromPoints(p);
+};
+// cylinder outline: end rings, a few hoops and 24 generators
+const cage = [];
+for (const z of [zTop, zBot]) world.add(new THREE.Line(circle(R, z), lineMat('--frame', 0.95)));
+for (let z = zBot + 148.28; z < zTop - 1; z += 148.28) world.add(new THREE.Line(circle(R, z), lineMat('--frame', 0.35)));
+for (let i = 0; i < 24; i++) {
+  const a = (2 * Math.PI * i) / 24;
+  cage.push(R * Math.cos(a), R * Math.sin(a), zTop, R * Math.cos(a), R * Math.sin(a), zBot);
+}
+{ const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(cage, 3));
+  world.add(new THREE.LineSegments(g, lineMat('--frame', 0.35))); }
+// gate and cathode planes (no electrodes in the model: drawn dashed, for orientation only)
+for (const z of [D.gate_z_mm, D.cathode_z_mm]) {
+  const l = new THREE.Line(circle(R, z), lineMat('--frame', 0.9, true)); l.computeLineDistances(); world.add(l);
+}
+// SiPMs: tiny squares on the SiPM plane, uncoloured
+{
+  const h = D.sipm_half_mm, n = D.sipm_xy.length, pos = new Float32Array(n * 12), idx = new Uint32Array(n * 6);
+  D.sipm_xy.forEach(([x, y], i) => {
+    pos.set([x - h, y - h, zTop - 0.3, x + h, y - h, zTop - 0.3, x + h, y + h, zTop - 0.3, x - h, y + h, zTop - 0.3], 12 * i);
+    idx.set([4 * i, 4 * i + 1, 4 * i + 2, 4 * i, 4 * i + 2, 4 * i + 3], 6 * i);
+  });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(new THREE.BufferAttribute(idx, 1));
+  const m = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }); themed.push([m, '--sipm']);
+  world.add(new THREE.Mesh(g, m));
+}
+// PMT windows: one disc each, coloured by the data
+const discGeo = new THREE.CircleGeometry(D.pmt_radius_mm, 64);
+const pmts = D.pmt_xy.map(([x, y], k) => {
+  const m = new THREE.Mesh(discGeo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+  m.position.set(x, y, zBot + 0.5); m.userData.k = k; world.add(m); return m;
+});
+// sources: every position as a small dot, the chosen one larger
+const dotGeo = new THREE.SphereGeometry(9, 20, 14), ringGeo = new THREE.SphereGeometry(22, 24, 16);
+const dotMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.35 }); themed.push([dotMat, '--source']);
+const selMat = new THREE.MeshBasicMaterial(); themed.push([selMat, '--source']);
+const haloMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.18, depthWrite: false }); themed.push([haloMat, '--source']);
+const dots = D.positions.map((p, i) => {
+  const m = new THREE.Mesh(dotGeo, dotMat); m.position.set(...p.xyz_mm); m.userData.i = i; world.add(m); return m;
+});
+const halo = new THREE.Mesh(ringGeo, haloMat); world.add(halo);
+
+// labels projected from 3D anchors
+const TAGS = [['SiPM plane', zTop], ['Gate', D.gate_z_mm], ['Cathode', D.cathode_z_mm], ['PMT plane', zBot]];
+const tagEls = TAGS.map(([text, z]) => { const e = document.createElement('div'); e.className = 'tag'; e.textContent = text; $('tags').appendChild(e); return [e, new THREE.Vector3(0, R + 30, z)]; });
+
+// ---------- colour scale ----------
+const hexToRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+function ramp(t) {
+  const stops = isDark() ? [...RAMP].reverse() : RAMP;
+  const x = Math.min(Math.max(t, 0), 1) * (stops.length - 1), i = Math.min(Math.floor(x), stops.length - 2), f = x - i;
+  const a = hexToRgb(stops[i]), b = hexToRgb(stops[i + 1]);
+  return `rgb(${a.map((v, j) => Math.round(v + f * (b[j] - v))).join(',')})`;
+}
+function range(mode) {
+  const vals = state.fit ? D.positions[state.pos][mode] : D.positions.flatMap((p) => p[mode]);
+  const pos = vals.filter((v) => v > 0);
+  return mode === 'direct'
+    ? { log: true, lo: Math.max(Math.min(...pos), 1), hi: Math.max(...pos) }
+    : { log: false, lo: Math.min(...vals), hi: Math.max(...vals) };
+}
+const toT = (v, r) => r.log ? (Math.log10(Math.max(v, r.lo)) - Math.log10(r.lo)) / (Math.log10(r.hi) - Math.log10(r.lo) || 1)
+                            : (v - r.lo) / ((r.hi - r.lo) || 1);
+function niceTicks(r) {
+  if (r.log) {
+    const out = [r.lo];
+    for (let e = Math.ceil(Math.log10(r.lo)); e <= Math.floor(Math.log10(r.hi)); e++) out.push(10 ** e);
+    out.push(r.hi); return trim([...new Set(out)], r);
+  }
+  const span = r.hi - r.lo, raw = span / 4, mag = 10 ** Math.floor(Math.log10(raw || 1));
+  const step = [1, 2, 2.5, 5, 10].map((s) => s * mag).find((s) => span / s <= 5) || mag * 10;
+  const out = [r.lo];
+  for (let v = Math.ceil(r.lo / step) * step; v < r.hi; v += step) if (v > r.lo) out.push(v);
+  out.push(r.hi); return trim(out, r);
+}
+// keep both ends; drop inner ticks that would crowd an end label
+const trim = (ticks, r) => ticks.filter((v, i) => i === 0 || i === ticks.length - 1 || (toT(v, r) > 0.12 && toT(v, r) < 0.88));
+
+// ---------- rendering of the current state ----------
+function paint() {
+  const p = D.positions[state.pos], vals = p[state.mode], r = range(state.mode);
+  pmts.forEach((m, k) => m.material.color.set(ramp(toT(vals[k], r))));
+  dots.forEach((m, i) => { m.material = i === state.pos ? selMat : dotMat; m.scale.setScalar(i === state.pos ? 1.6 : 1); });
+  halo.position.set(...p.xyz_mm);
+  // colour key
+  const stops = Array.from({ length: 13 }, (_, i) => ramp(i / 12));
+  $('bar').style.background = `linear-gradient(90deg, ${stops.join(', ')})`;
+  const ticks = niceTicks(r);
+  $('ticks').innerHTML = ticks.map((v, i) => {
+    const cls = i === 0 ? 'first' : i === ticks.length - 1 ? 'last' : '';
+    return `<span class="${cls}" style="left:${(100 * toT(v, r)).toFixed(2)}%">${fmt(v)}</span>`;
+  }).join('');
+  const name = { direct: 'Direct', indirect: 'Indirect', total: 'Total' }[state.mode];
+  $('key-caption').textContent = `${name} light, ${r.log ? 'log' : 'linear'} scale, ${state.fit ? 'fitted to this position' : 'shared by all 9 positions'}.`;
+  // sums
+  const sum = (a) => a.reduce((s, v) => s + v, 0);
+  $('s-pd').textContent = fmt(sum(p.direct)); $('s-pi').textContent = fmt(sum(p.indirect)); $('s-pt').textContent = fmt(sum(p.total));
+  $('n-pmt').textContent = `${D.pmt_xy.length} PMTs`; $('n-sipm').textContent = `${D.sipm_xy.length} SiPMs`;
+  $('s-sd').textContent = fmt(p.sipm.direct); $('s-si').textContent = fmt(p.sipm.indirect); $('s-st').textContent = fmt(p.sipm.total);
+  // table
+  $('values').innerHTML = D.pmt_xy.map(([x, y], k) =>
+    `<tr><td>${D.pmt_id[k]}</td><td>${x.toFixed(1)}</td><td>${y.toFixed(1)}</td><td>${fmt(p.direct[k])}</td><td>${fmt(p.indirect[k])}</td><td>${fmt(p.total[k])}</td></tr>`).join('');
+  for (const b of document.querySelectorAll('[data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === state.mode));
+  for (const b of document.querySelectorAll('[data-pos]')) b.setAttribute('aria-pressed', String(+b.dataset.pos === state.pos));
+}
+function applyTheme() {
+  renderer.setClearColor(new THREE.Color(token('--surface')), 1);
+  for (const [m, t] of themed) m.color.set(token(t));
+  paint();
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+// ---------- controls ----------
+{
+  const drifts = [...new Set(D.positions.map((p) => p.drift_m))];
+  const xs = [...new Set(D.positions.map((p) => p.xyz_mm[0]))];
+  let html = '<div></div>' + xs.map((x) => `<div class="colhead">x ${x.toFixed(0)}</div>`).join('');
+  for (const dr of drifts) {
+    html += `<div class="rowhead">${dr.toFixed(1)} m</div>`;
+    for (const x of xs) {
+      const i = D.positions.findIndex((p) => p.drift_m === dr && p.xyz_mm[0] === x);
+      html += `<button type="button" id="pos-${i}" data-pos="${i}" aria-pressed="false" aria-label="${dr.toFixed(1)} m from the gate, x ${x.toFixed(0)} mm">${dr.toFixed(1)} · ${x.toFixed(0)}</button>`;
+    }
+  }
+  html += '<div></div><div class="axis">rows: distance from the gate · columns: x (mm)</div>';
+  $('picker').innerHTML = html;
+}
+$('picker').addEventListener('click', (e) => { const b = e.target.closest('[data-pos]'); if (b) { state.pos = +b.dataset.pos; paint(); } });
+for (const b of document.querySelectorAll('[data-mode]')) b.addEventListener('click', () => { state.mode = b.dataset.mode; paint(); });
+$('fit').addEventListener('change', (e) => { state.fit = e.target.checked; paint(); });
+
+const nx = (x, y, z) => new THREE.Vector3(-z, y, x);   // LUCiD -> screen frame
+const VIEWS = {
+  pmt:   { fov: 16, target: nx(0, 0, zBot), pos: nx(0, 0, zTop + 3600) },
+  whole: { fov: 30, target: nx(0, 0, 0), pos: nx(2000, 750, 1150) },
+  above: { fov: 30, target: nx(0, 0, 0), pos: nx(700, 2500, 0) },
+};
+function setView(name) {
+  const v = VIEWS[name];
+  camera.fov = v.fov; camera.updateProjectionMatrix();
+  controls.target.copy(v.target); camera.position.copy(v.pos); controls.update();
+  for (const b of document.querySelectorAll('[data-view]')) b.setAttribute('aria-pressed', String(b.dataset.view === name));
+}
+for (const b of document.querySelectorAll('[data-view]')) b.addEventListener('click', () => setView(b.dataset.view));
+
+// ---------- hover and click ----------
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+let pointer = null;
+canvas.addEventListener('pointermove', (e) => { pointer = e; });
+canvas.addEventListener('pointerleave', () => { pointer = null; tip.hidden = true; });
+canvas.addEventListener('click', (e) => {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(dots, false)[0];
+  if (hit) { state.pos = hit.object.userData.i; paint(); }
+});
+function hover(e) {
+  const r = canvas.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  ndc.set((px / r.width) * 2 - 1, -(py / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects([...pmts, ...dots], false)[0];
+  if (!hit) { tip.hidden = true; return; }
+  const p = D.positions[state.pos];
+  if (hit.object.userData.k !== undefined) {
+    const k = hit.object.userData.k, [x, y] = D.pmt_xy[k];
+    const rim = Math.hypot(x, y) + D.pmt_radius_mm > R ? '<br>Partly outside the cylinder: only its inner part can be hit.' : '';
+    tip.innerHTML = `<span class="src">PMT ${D.pmt_id[k]} · x ${x.toFixed(0)}, y ${y.toFixed(0)} mm</span>`
+      + `<table><tr><td>Direct</td><td>${fmt(p.direct[k])}</td></tr><tr><td>Indirect</td><td>${fmt(p.indirect[k])}</td></tr>`
+      + `<tr><td>Total</td><td>${fmt(p.total[k])}</td></tr></table>${rim}`;
+  } else {
+    const q = D.positions[hit.object.userData.i];
+    tip.innerHTML = `<span class="src">Source</span>${q.drift_m.toFixed(1)} m from the gate, x ${q.xyz_mm[0].toFixed(0)} mm. Click to show it.`;
+  }
+  tip.hidden = false;
+  tip.style.left = `${Math.max(8, Math.min(px + 14, r.width - tip.offsetWidth - 8))}px`;
+  tip.style.top = `${Math.max(8, Math.min(py + 14, r.height - tip.offsetHeight - 8))}px`;
+}
+
+// ---------- loop ----------
+const tmp = new THREE.Vector3();
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / Math.max(h, 1); camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(viewer);
+function frame() {
+  requestAnimationFrame(frame);
+  controls.update();
+  renderer.render(scene, camera);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  for (const [el, anchor] of tagEls) {
+    tmp.copy(anchor).applyMatrix4(world.matrixWorld).project(camera);
+    const vis = tmp.z < 1 && Math.abs(tmp.x) < 1.05 && Math.abs(tmp.y) < 1.05;
+    el.hidden = !vis;
+    if (vis) { el.style.left = `${((tmp.x + 1) / 2) * w}px`; el.style.top = `${((1 - tmp.y) / 2) * h}px`; }
+  }
+  if (pointer) { hover(pointer); pointer = null; }
+}
+resize(); setView('pmt'); applyTheme();
+$('status').hidden = true;
+frame();
+</script>

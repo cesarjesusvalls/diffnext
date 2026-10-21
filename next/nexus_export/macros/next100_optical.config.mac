@@ -1,0 +1,8 @@
+/run/verbose 0
+/Geometry/Next100/pressure 13.5 bar
+/Generator/ScintGenerator/nphotons 1
+/Generator/ScintGenerator/region ACTIVE
+/nexus/persistency/output_file unused.next
+/Geometry/Next100/field_cage_vis true
+/Geometry/Next100/sipm_vis true
+/Geometry/Next100/grid_vis false

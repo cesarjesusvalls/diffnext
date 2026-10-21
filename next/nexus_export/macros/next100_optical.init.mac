@@ -1,0 +1,9 @@
+/PhysicsList/RegisterPhysics G4EmStandardPhysics_option4
+/PhysicsList/RegisterPhysics G4DecayPhysics
+/PhysicsList/RegisterPhysics G4OpticalPhysics
+/PhysicsList/RegisterPhysics NexusPhysics
+/nexus/RegisterGeometry Next100OpticalGeometry
+/nexus/RegisterGenerator ScintillationGenerator
+/nexus/RegisterPersistencyManager PersistencyManager
+/nexus/RegisterRunAction DefaultRunAction
+/nexus/RegisterMacro macros/next100_optical.config.mac

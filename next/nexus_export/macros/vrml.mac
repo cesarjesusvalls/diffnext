@@ -1,0 +1,6 @@
+/vis/geometry/set/visibility EL_GRID 0 true
+/vis/geometry/set/visibility EL_GAP 0 true
+/vis/geometry/set/visibility SIPM_BOARD_MASK_HOLE 0 true
+/vis/open VRML2FILE
+/vis/drawVolume
+/vis/viewer/flush

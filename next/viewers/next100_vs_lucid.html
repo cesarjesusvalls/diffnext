@@ -1,0 +1,508 @@
+<title>NEXT-100 vs LUCiD Geometry</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a detector-drawing sheet. One wide 3D viewport with its controls, the component list
+   beside it (below it on phones), then the component-by-component comparison table. */
+:root {
+  --bg: #f4f4f1;
+  --surface: #fcfcfb;
+  --panel: #ffffff;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #6f6e69;
+  --line: #e1e0d9;
+  --line-strong: #c3c2b7;
+  --sensor: #2a78d6;
+  --reflector: #eb6834;
+  --electrode: #1baf7a;
+  --structure: #9a9890;
+  --focus: #2a78d6;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d0d0d; --surface: #1a1a19; --panel: #151514; --ink: #f0efec; --ink-2: #c3c2b7;
+    --muted: #9c9b95; --line: #2c2c2a; --line-strong: #44443f; --sensor: #3987e5;
+    --reflector: #d95926; --electrode: #199e70; --structure: #77766f; --focus: #6da7ec;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d0d0d; --surface: #1a1a19; --panel: #151514; --ink: #f0efec; --ink-2: #c3c2b7;
+  --muted: #9c9b95; --line: #2c2c2a; --line-strong: #44443f; --sensor: #3987e5;
+  --reflector: #d95926; --electrode: #199e70; --structure: #77766f; --focus: #6da7ec;
+  color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px;
+  line-height: 1.5;
+}
+.page {
+  max-width: 1320px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+  display: grid; gap: 22px;
+}
+header { display: grid; gap: 6px; }
+.eyebrow {
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted);
+}
+h1 {
+  font-family: var(--font-display); font-weight: 600; font-size: clamp(30px, 4.4vw, 44px);
+  line-height: 1.05; margin: 0; letter-spacing: 0.01em; text-wrap: balance;
+}
+.dek { margin: 0; color: var(--ink-2); max-width: 70ch; }
+h2 {
+  font-family: var(--font-display); font-weight: 600; font-size: 24px; margin: 0;
+  letter-spacing: 0.02em; text-wrap: balance;
+}
+.workbench { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .workbench { grid-template-columns: minmax(0, 1fr); } }
+
+.viewer {
+  position: relative; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; overflow: hidden; height: clamp(420px, 68vh, 760px);
+}
+#gl { display: block; width: 100%; height: 100%; touch-action: none; }
+.toolbar {
+  position: absolute; left: 10px; right: 10px; top: 10px; display: flex; flex-wrap: wrap;
+  gap: 8px; justify-content: space-between; pointer-events: none;
+}
+.toolbar > div { display: flex; flex-wrap: wrap; gap: 6px; pointer-events: auto; }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 5px; overflow: hidden; background: var(--panel); }
+.seg button, .chip {
+  font: 500 13px/1 var(--font-body); color: var(--ink-2); background: var(--panel);
+  border: 0; padding: 8px 11px; cursor: pointer;
+}
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { color: var(--ink); background: var(--line); }
+.chip { border: 1px solid var(--line-strong); border-radius: 5px; }
+.chip[aria-pressed="true"] { color: var(--ink); background: var(--line); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pane-label {
+  position: absolute; font: 600 13px/1 var(--font-display); letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--ink-2); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px; pointer-events: none;
+}
+.frame-note {
+  position: absolute; left: 10px; bottom: 10px; right: 10px; font: 12px/1.4 var(--font-mono);
+  color: var(--muted); pointer-events: none;
+}
+.status {
+  position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-2);
+  font-family: var(--font-mono); font-size: 13px; padding: 16px; text-align: center;
+}
+.tip {
+  position: absolute; max-width: 300px; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--line-strong); border-radius: 5px; padding: 8px 10px; font-size: 13px;
+  line-height: 1.4; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+}
+.tip b { font-weight: 600; }
+.tip .src { display: block; font: 11px/1.3 var(--font-mono); color: var(--muted); margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.parts { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; display: grid; gap: 14px; }
+.parts h3 { margin: 0; font: 600 15px/1.2 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.parts ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.parts label { display: grid; grid-template-columns: 16px 14px minmax(0, 1fr) auto; gap: 8px; align-items: center; cursor: pointer; font-size: 14px; padding: 3px 0; }
+.parts input { margin: 0; width: 16px; height: 16px; accent-color: var(--ink-2); }
+.sw { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+.sw.lucid { background: transparent !important; border: 2px solid; }
+.count { font: 12px var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.key { display: grid; gap: 6px; font-size: 13px; color: var(--ink-2); border-top: 1px solid var(--line); padding-top: 12px; }
+.key div { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 8px; align-items: center; }
+
+.notes { display: grid; gap: 10px; max-width: 78ch; }
+.notes p { margin: 0; color: var(--ink-2); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+thead th { font: 600 14px/1.2 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); background: var(--surface); }
+tbody th { font-weight: 600; white-space: nowrap; }
+tbody tr:last-child > * { border-bottom: 0; }
+td.same { color: var(--ink-2); }
+.mono { font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.pending { font: 500 11px/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid var(--line-strong); border-radius: 3px; padding: 2px 5px; color: var(--ink-2); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">nexus master · Next100OpticalGeometry &nbsp;/&nbsp; LUCiD · NEXT100_like_geom_config.json</div>
+    <h1>NEXT-100 vs LUCiD Geometry</h1>
+    <p class="dek">The NEXT-100 inner detector as nexus builds it in Geant4, and the cylinder LUCiD uses for it, drawn in the same frame. Drag to orbit, scroll to zoom, hover any part for its numbers.</p>
+  </header>
+
+  <section class="workbench" aria-label="3D comparison">
+    <div class="viewer" id="viewer">
+      <canvas id="gl" aria-label="3D view of the NEXT-100 geometry and its LUCiD model"></canvas>
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="Camera">
+          <button type="button" id="v-whole" data-view="whole" aria-pressed="true">Whole detector</button>
+          <button type="button" id="v-readout" data-view="readout" aria-pressed="false">SiPM plane</button>
+          <button type="button" id="v-edge" data-view="edge" aria-pressed="false">EL-region edge</button>
+          <button type="button" id="v-cathode" data-view="cathode" aria-pressed="false">Cathode end</button>
+        </div>
+        <div>
+          <div class="seg" role="group" aria-label="Layout">
+            <button type="button" id="l-overlay" data-layout="overlay" aria-pressed="true">Overlay</button>
+            <button type="button" id="l-split" data-layout="split" aria-pressed="false">Side by side</button>
+          </div>
+          <button type="button" class="chip" id="cut" aria-pressed="true">Cut open</button>
+        </div>
+      </div>
+      <div class="pane-label" id="label-a" hidden>LUCiD</div>
+      <div class="pane-label" id="label-b" hidden>NEXT-100 (nexus)</div>
+      <div class="frame-note" id="frame-note">nexus frame, mm · gate at z = 0, z grows towards the cathode (left → right in the default view)</div>
+      <div class="tip" id="tip" hidden></div>
+      <div class="status" id="status">Loading the Geant4 export…</div>
+    </div>
+
+    <aside class="parts" aria-label="Components">
+      <div>
+        <h3>NEXT-100 · nexus</h3>
+        <ul id="list-nexus"></ul>
+      </div>
+      <div>
+        <h3>NEXT-like · LUCiD</h3>
+        <ul id="list-lucid"></ul>
+      </div>
+      <div class="key" aria-label="Colour key">
+        <div><span class="sw" style="background: var(--sensor)"></span><span>Photosensors</span></div>
+        <div><span class="sw" style="background: var(--reflector)"></span><span>Reflecting surfaces (every LUCiD wall reflects)</span></div>
+        <div><span class="sw" style="background: var(--electrode)"></span><span>Electrodes and the EL gap</span></div>
+        <div><span class="sw" style="background: var(--structure)"></span><span>Support structure</span></div>
+        <div><span class="sw lucid" style="border-color: var(--ink-2)"></span><span>LUCiD parts are drawn as outlines</span></div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="notes" aria-label="How the two are aligned">
+    <h2>How the two are aligned</h2>
+    <p>Both geometries sit in the nexus frame of <span class="mono">Next100OpticalGeometry</span>, in millimetres: the gate is at z = 0 and z grows towards the cathode. The LUCiD cylinder is placed on the light-tube axis, with its readout cap on the SiPM sensitive surface (z = −24.13 mm) and its PMT cap on the sapphire-window face (z = 1458.67 mm).</p>
+    <p>In nexus the tracking and energy planes are centred (3.7, 6.4) mm off the light-tube axis. LUCiD places them the same way, so every SiPM and every PMT window sits where nexus has it.</p>
+  </section>
+
+  <section class="notes" aria-label="Component comparison" style="max-width: none">
+    <h2>Component by component</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Part</th><th scope="col">NEXT-100 in nexus</th><th scope="col">NEXT-like in LUCiD</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Side wall</th>
+            <td>Teflon light tube with TPB, 18 flat panels, <span class="mono">491.65 mm</span> to each panel (<span class="mono">499.2 mm</span> to the corners), from <span class="mono">z = 14.1</span> to <span class="mono">1185.1 mm</span>. Between it and the SiPMs: steel gate and anode rings, inner diameter <span class="mono">995 mm</span>.</td>
+            <td>One cylinder of radius <span class="mono">491.65 mm</span> from the SiPM plane to the PMT windows, <span class="mono">1482.80 mm</span> long.</td></tr>
+          <tr><th scope="row">Axes</th>
+            <td>Light tube and cathode on the field-cage axis, displaced <span class="mono">(−3.7, −6.4) mm</span> from the axis of the EL region, tracking plane and energy plane.</td>
+            <td>The cylinder on the light-tube axis; the tracking and energy planes centred <span class="mono">(3.7, 6.4) mm</span> off it, as in nexus.</td></tr>
+          <tr><th scope="row">SiPMs</th>
+            <td>Hamamatsu S13372-1350TE, <span class="mono">1.3 × 1.3 mm</span> sensitive area, <span class="mono">15.55 mm</span> pitch, 3584 on 56 boards; 3130 have their centre inside the light-tube radius. Sensitive surface at <span class="mono">z = −24.1 mm</span>.</td>
+            <td>Those 3130, as flat <span class="mono">1.3 × 1.3 mm</span> squares at the nexus positions, with the nexus ids, on the readout cap at <span class="mono">z = −24.13 mm</span>.</td></tr>
+          <tr><th scope="row">Around each SiPM</th>
+            <td>A <span class="mono">6 × 6 mm</span> hole in a <span class="mono">6 mm</span> TPB-coated teflon mask; the sensitive area sits <span class="mono">5.2 mm</span> below the mask face (<span class="mono">z = −18.9 mm</span>).</td>
+            <td>No mask: SiPMs and a reflecting wall share one plane.</td></tr>
+          <tr><th scope="row">Where S2 light is made</th>
+            <td>The EL gap, between the anode mesh (<span class="mono">z = −10.1</span>) and the gate mesh (<span class="mono">z = −0.1 mm</span>): <span class="mono">14–24 mm</span> from the SiPM surfaces.</td>
+            <td>No electrodes. Point sources go wherever they are placed, for example <span class="mono">14–24 mm</span> from the readout cap.</td></tr>
+          <tr><th scope="row">Cathode end</th>
+            <td>Hexagonal steel mesh at <span class="mono">z = 1187.4 mm</span>, then a <span class="mono">271 mm</span> buffer with its own light tube up to the PMT windows.</td>
+            <td>No cathode: the mesh is fully open, so the drift region and the buffer are one volume, with the side wall continuing to the PMT windows.</td></tr>
+          <tr><th scope="row">Energy plane</th>
+            <td>60 PMTs behind <span class="mono">80 mm</span> TPB-coated sapphire windows, faces at <span class="mono">z = 1458.7 mm</span>, standing 9 mm out of a copper plate.</td>
+            <td>60 flat <span class="mono">80 mm</span> discs at the window positions, on the PMT cap at <span class="mono">z = 1458.67 mm</span>; the cap reflects between them. Twelve reach past the cylinder radius and can only be hit on their inner part.</td></tr>
+          <tr><th scope="row">Gas</th>
+            <td>Xenon at <span class="mono">13.5 bar</span>; nexus gives it no absorption length and no Rayleigh table.</td>
+            <td class="same">Same: scattering and absorption lengths of <span class="mono">10⁹ m</span>.</td></tr>
+          <tr><th scope="row">Surface optics</th>
+            <td>Teflon: Lambertian, reflectivity <span class="mono">0.94</span> (visible) and <span class="mono">0.72</span> (VUV), TPB wavelength shifting. Copper between the PMT windows: <span class="mono">0.2–0.4</span>, mostly specular.</td>
+            <td>One Lambertian reflectivity, <span class="mono">0.94</span>, for every wall, no wavelength shifting. SiPMs and PMT windows absorb every photon that reaches them.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const $ = (id) => document.getElementById(id);
+const ROLE_TOKEN = { sensor: '--sensor', reflector: '--reflector', electrode: '--electrode', structure: '--structure' };
+// Fill opacity per group; LUCiD shells are faint fills under their outlines.
+const OPACITY = { n_sipm: 1, n_mask: 0.4, n_hole: 0.5, n_tube: 0.16, n_el: 0.3, n_cath: 0.4,
+  n_pmt: 0.9, n_cu: 0.16, n_fc: 0.18, l_barrel: 0.05, l_top: 0.08, l_bottom: 0.08, l_sipm: 0.3,
+  l_pmt: 0.3 };
+const NOTES = {
+  n_sipm: 'Hamamatsu S13372-1350TE sensitive areas, 1.3 × 1.3 mm, 15.55 mm pitch on 56 boards. Sensitive surface at z = −24.1 mm.',
+  n_mask: 'Teflon masks, 6 mm thick and TPB-coated, over the SiPM boards. Front face at z = −18.9 mm.',
+  n_hole: 'One 6 × 6 mm hole per SiPM; the sensitive area sits 5.2 mm below the mask face.',
+  n_tube: 'Teflon light tube with TPB, 18 panels at 491.65 mm. Drift part z = 14.1 to 1185.1 mm, buffer part 1202.1 to 1443.1 mm.',
+  n_el: 'Anode mesh z = −10.2 to −10.1 mm, 10 mm EL gap, gate mesh z = −0.1 to 0. Steel rings, inner diameter 995 mm.',
+  n_cath: 'Cathode: hexagonal steel mesh at z = 1187.4 mm and its ring.',
+  n_pmt: '60 PMTs behind sapphire windows; window face at z = 1458.7 mm.',
+  n_cu: 'Copper plates behind the tracking plane and the energy plane.',
+  n_fc: 'Field rings, staves and the HDPE tube around the light tube.',
+  l_barrel: 'Cylinder wall, r = 491.65 mm, z = −24.13 to 1458.67 mm. Reflects.',
+  l_top: 'Readout cap at the SiPM surface, z = −24.13 mm. Reflects between the SiPMs.',
+  l_bottom: 'PMT cap at the sapphire-window face, z = 1458.67 mm. Reflects between the windows.',
+  l_sipm: 'Flat 1.3 × 1.3 mm SiPMs at the nexus positions, the ones inside the cylinder.',
+  l_pmt: 'Flat 80 mm discs at the nexus window positions. The outer ones reach past the cylinder radius; only their inner part can be hit.',
+};
+
+const viewer = $('viewer'), canvas = $('gl'), tip = $('tip'), status = $('status');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, logarithmicDepthBuffer: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.localClippingEnabled = true;
+const scene = new THREE.Scene();
+// nexus (x, y, z) -> three (z, y, -x): the detector axis runs left to right on screen.
+const world = new THREE.Group(); world.rotation.y = Math.PI / 2; scene.add(world);
+const roots = { nexus: new THREE.Group(), lucid: new THREE.Group() };
+world.add(roots.nexus, roots.lucid);
+const camera = new THREE.PerspectiveCamera(30, 1, 0.3, 40000);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x808080, 1.6));
+const head = new THREE.DirectionalLight(0xffffff, 1.5); scene.add(head, head.target);
+
+// Keep nexus x >= 0 (three z <= 0): the half facing the default camera is cut away.
+const cutPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
+let cutOn = true, layout = 'overlay';
+const materials = [], parts = {};   // parts[key] = { objects: [], meshes: [] }
+
+const token = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function decode(b64, Type) {
+  const s = atob(b64), u = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+  return new Type(u.buffer);
+}
+function material(kind, role, opacity) {
+  const opts = { transparent: opacity < 1, opacity, depthWrite: opacity >= 1, clippingPlanes: [cutPlane] };
+  const m = kind === 'lines'
+    ? new THREE.LineBasicMaterial(opts)
+    : new THREE.MeshStandardMaterial({ ...opts, side: THREE.DoubleSide, flatShading: true, roughness: 0.75, metalness: 0 });
+  m.userData.token = ROLE_TOKEN[role];
+  materials.push(m);
+  return m;
+}
+function addPart(key, obj, pickable) {
+  (parts[key] ||= { objects: [], meshes: [] }).objects.push(obj);
+  if (pickable) parts[key].meshes.push(obj);
+}
+
+function buildGroup(g) {
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(decode(g.positions, Float32Array), 3));
+  geom.setIndex(new THREE.BufferAttribute(decode(g.indices, Uint32Array), 1));
+  const root = roots[g.detector];
+  if (g.kind === 'lines') {
+    const obj = new THREE.LineSegments(geom, material('lines', g.role, OPACITY[g.key]));
+    root.add(obj); addPart(g.key, obj, false); return;
+  }
+  geom.computeVertexNormals();
+  const mesh = new THREE.Mesh(geom, material('mesh', g.role, OPACITY[g.key]));
+  mesh.userData.key = g.key;
+  mesh.renderOrder = OPACITY[g.key] >= 1 ? 0 : 1;
+  root.add(mesh); addPart(g.key, mesh, true);
+  if (g.key === 'l_sipm') {           // outline every LUCiD SiPM square
+    const n = g.count, idx = new Uint32Array(n * 8);
+    for (let i = 0; i < n; i++) idx.set([0, 1, 1, 2, 2, 3, 3, 0].map((k) => 4 * i + k), 8 * i);
+    const lg = new THREE.BufferGeometry();
+    lg.setAttribute('position', geom.getAttribute('position'));
+    lg.setIndex(new THREE.BufferAttribute(idx, 1));
+    const lines = new THREE.LineSegments(lg, material('lines', 'sensor', 1));
+    root.add(lines); addPart(g.key, lines, false);
+  }
+  if (g.key === 'l_pmt') {            // outline every LUCiD PMT disc
+    const s = g.ring_segments, per = s + 1, idx = new Uint32Array(g.count * s * 2);
+    for (let i = 0; i < g.count; i++)
+      for (let k = 0; k < s; k++) idx.set([per * i + 1 + k, per * i + 1 + ((k + 1) % s)], 2 * (s * i + k));
+    const lg = new THREE.BufferGeometry();
+    lg.setAttribute('position', geom.getAttribute('position'));
+    lg.setIndex(new THREE.BufferAttribute(idx, 1));
+    const lines = new THREE.LineSegments(lg, material('lines', 'sensor', 1));
+    root.add(lines); addPart(g.key, lines, false);
+  }
+}
+
+function lucidCage(meta) {          // outlines of the LUCiD cylinder: rings and generators
+  const { radius_mm: R, z_top: z0, z_bottom: z1 } = meta.lucid;
+  const pts = [], seg = 180, ring = (z) => {
+    for (let i = 0; i < seg; i++) {
+      const a = (2 * Math.PI * i) / seg, b = (2 * Math.PI * (i + 1)) / seg;
+      pts.push(R * Math.cos(a), R * Math.sin(a), z, R * Math.cos(b), R * Math.sin(b), z);
+    }
+  };
+  const barrel = [];
+  for (let z = z0; z < z1; z += 151.4375) ring(z);
+  ring(z1);
+  for (let i = 0; i < 24; i++) {
+    const a = (2 * Math.PI * i) / 24;
+    barrel.push(R * Math.cos(a), R * Math.sin(a), z0, R * Math.cos(a), R * Math.sin(a), z1);
+  }
+  const mk = (arr, key) => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+    const obj = new THREE.LineSegments(geo, material('lines', 'reflector', 0.85));
+    roots.lucid.add(obj); addPart(key, obj, false);
+  };
+  mk(pts.concat(barrel), 'l_barrel');
+  const capRing = (z) => { const a = []; for (let i = 0; i < seg; i++) {
+    const t0 = (2 * Math.PI * i) / seg, t1 = (2 * Math.PI * (i + 1)) / seg;
+    a.push(R * Math.cos(t0), R * Math.sin(t0), z, R * Math.cos(t1), R * Math.sin(t1), z); } return a; };
+  mk(capRing(z0), 'l_top');
+  mk(capRing(z1), 'l_bottom');
+}
+
+function buildList(data) {
+  for (const g of data.groups) {
+    const li = document.createElement('li');
+    const id = `part-${g.key}`;
+    const lucid = g.detector === 'lucid';
+    li.innerHTML = `<label for="${id}"><input type="checkbox" id="${id}" checked>`
+      + `<span class="sw${lucid ? ' lucid' : ''}" style="${lucid ? 'border-color' : 'background'}: var(${ROLE_TOKEN[g.role]})"></span>`
+      + `<span>${g.label}</span><span class="count">${g.count > 1 ? g.count : ''}</span></label>`;
+    $(lucid ? 'list-lucid' : 'list-nexus').appendChild(li);
+    li.querySelector('input').addEventListener('change', (e) => setPart(g.key, e.target.checked));
+  }
+}
+function setPart(key, on) {
+  for (const o of parts[key].objects) o.visible = on;
+  const box = $(`part-${key}`); if (box) box.checked = on;
+}
+
+function applyTheme() {
+  renderer.setClearColor(new THREE.Color(token('--surface')), 1);
+  for (const m of materials) m.color.set(token(m.userData.token));
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+function setCut(on) {
+  cutOn = on;
+  for (const m of materials) { m.clippingPlanes = on ? [cutPlane] : []; m.needsUpdate = true; }
+  $('cut').setAttribute('aria-pressed', String(on));
+}
+const nx = (x, y, z) => new THREE.Vector3(z, y, -x);   // nexus -> three
+const VIEWS = {
+  whole:   { target: nx(0, 0, 640), pos: nx(-1900, 700, -650), cut: true },
+  readout: { target: nx(0, 0, -24.1), pos: nx(-38, 30, 72), cut: false, hide: ['n_el', 'n_tube', 'n_fc', 'l_barrel'] },
+  edge:    { target: nx(0, 478, 0), pos: nx(-230, 478, 0), cut: true },
+  cathode: { target: nx(0, 400, 1320), pos: nx(-1050, 400, 1320), cut: true },
+};
+function setView(name) {
+  const v = VIEWS[name];
+  for (const key of Object.keys(parts)) setPart(key, !(v.hide || []).includes(key));
+  setCut(v.cut);
+  controls.target.copy(v.target); camera.position.copy(v.pos); controls.update();
+  for (const b of document.querySelectorAll('[data-view]')) b.setAttribute('aria-pressed', String(b.dataset.view === name));
+}
+function setLayout(name) {
+  layout = name;
+  for (const b of document.querySelectorAll('[data-layout]')) b.setAttribute('aria-pressed', String(b.dataset.layout === name));
+  $('label-a').hidden = $('label-b').hidden = name !== 'split';
+  placeLabels();
+}
+
+function panes() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (layout === 'overlay') return [{ x: 0, y: 0, w, h, show: ['nexus', 'lucid'] }];
+  const stacked = w < 640;
+  return stacked
+    ? [{ x: 0, y: h / 2, w, h: h / 2, show: ['lucid'] }, { x: 0, y: 0, w, h: h / 2, show: ['nexus'] }]
+    : [{ x: 0, y: 0, w: w / 2, h, show: ['lucid'] }, { x: w / 2, y: 0, w: w / 2, h, show: ['nexus'] }];
+}
+function placeLabels() {
+  const w = canvas.clientWidth, h = canvas.clientHeight, stacked = w < 640;
+  const a = $('label-a'), b = $('label-b');
+  a.style.left = '10px'; a.style.top = '56px';
+  b.style.left = stacked ? '10px' : `${w / 2 + 10}px`; b.style.top = stacked ? `${h / 2 + 10}px` : '56px';
+}
+
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.floor(w * renderer.getPixelRatio()) || canvas.height !== Math.floor(h * renderer.getPixelRatio()))
+    renderer.setSize(w, h, false);
+  placeLabels();
+}
+new ResizeObserver(resize).observe(viewer);
+
+function frame() {
+  requestAnimationFrame(frame);
+  controls.update();
+  head.position.copy(camera.position); head.target.position.copy(controls.target);
+  const list = panes();
+  renderer.setScissorTest(list.length > 1);
+  for (const p of list) {
+    roots.nexus.visible = p.show.includes('nexus'); roots.lucid.visible = p.show.includes('lucid');
+    camera.aspect = p.w / Math.max(p.h, 1); camera.updateProjectionMatrix();
+    renderer.setViewport(p.x, p.y, p.w, p.h); renderer.setScissor(p.x, p.y, p.w, p.h);
+    renderer.render(scene, camera);
+  }
+  roots.nexus.visible = roots.lucid.visible = true;
+}
+
+// Hover: name the part under the pointer, in whichever pane it is.
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+let pending = null;
+canvas.addEventListener('pointermove', (e) => { pending = e; });
+canvas.addEventListener('pointerleave', () => { pending = null; tip.hidden = true; });
+function pick() {
+  requestAnimationFrame(pick);
+  if (!pending) return;
+  const e = pending; pending = null;
+  const r = canvas.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  const yUp = r.height - py;
+  const pane = panes().find((p) => px >= p.x && px <= p.x + p.w && yUp >= p.y && yUp <= p.y + p.h);
+  if (!pane) { tip.hidden = true; return; }
+  ndc.set(((px - pane.x) / pane.w) * 2 - 1, ((yUp - pane.y) / pane.h) * 2 - 1);
+  camera.aspect = pane.w / Math.max(pane.h, 1); camera.updateProjectionMatrix();
+  ray.setFromCamera(ndc, camera);
+  const targets = [];
+  for (const [key, part] of Object.entries(parts)) {
+    const det = key.startsWith('n_') ? 'nexus' : 'lucid';
+    if (!pane.show.includes(det)) continue;
+    for (const m of part.meshes) if (m.visible) targets.push(m);
+  }
+  const hits = ray.intersectObjects(targets, false).filter((h) => !cutOn || cutPlane.distanceToPoint(h.point) >= 0);
+  if (!hits.length) { tip.hidden = true; return; }
+  const key = hits[0].object.userData.key;
+  const lucid = key.startsWith('l_');
+  tip.innerHTML = `<span class="src">${lucid ? 'LUCiD' : 'nexus'}</span><b>${$(`part-${key}`).nextElementSibling.nextElementSibling.textContent}</b><br>${NOTES[key]}`;
+  tip.hidden = false;
+  const tx = Math.min(px + 14, r.width - tip.offsetWidth - 8), ty = Math.min(py + 14, r.height - tip.offsetHeight - 8);
+  tip.style.left = `${Math.max(8, tx)}px`; tip.style.top = `${Math.max(8, ty)}px`;
+}
+
+for (const b of document.querySelectorAll('[data-view]')) b.addEventListener('click', () => setView(b.dataset.view));
+for (const b of document.querySelectorAll('[data-layout]')) b.addEventListener('click', () => setLayout(b.dataset.layout));
+$('cut').addEventListener('click', () => setCut(!cutOn));
+
+try {
+  const res = await fetch('scene.json');
+  if (!res.ok) throw new Error(`scene.json: HTTP ${res.status}`);
+  const data = await res.json();
+  for (const g of data.groups) buildGroup(g);
+  lucidCage(data.meta);
+  buildList(data);
+  applyTheme();
+  resize();
+  setView('whole');
+  status.hidden = true;
+  frame();
+  pick();
+} catch (err) {
+  status.textContent = `The geometry did not load (${err.message}). Reload the page to try again.`;
+}
+</script>
