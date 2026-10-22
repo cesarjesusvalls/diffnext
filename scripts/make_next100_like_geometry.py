@@ -43,6 +43,10 @@ carries its own shape and size (``sensor_shape``, ``sensor_half_size``; the geom
 reads them with ``sensor_model: {"per_sensor": true}``) and keeps its nexus id: 1000 * board +
 slot for the SiPMs, the copy number 0-59 for the PMTs.
 
+The npz also records, in the LUCiD frame (m), where the gate (``gate_z``), the electroluminescence
+gap between the gate and anode meshes (``el_gap_z``) and the cathode (``cathode_z``) sit, for
+charge drift and S2 light; none of them is a surface in the LUCiD geometry.
+
 The npz ``sensor_radius`` is the SiPM half side (0.65 mm): it sizes the cylinder's cell lookup,
 and the cylinder classifies a sensor closer than that to the rim as a barrel sensor, so SiPMs
 whose centre lies within 0.65 mm of the rim are left out. The PMT windows span several cells
@@ -63,6 +67,7 @@ GRID_THICKNESS = 0.13                                   # Next100.cc grid_thickn
 GATE_TP_DIST = 25.0 + GRID_THICKNESS                    # Next100.cc gate_tracking_plane_distance_
 GATE_CATHODE_DIST = 1174.0 + 13.5 - GRID_THICKNESS      # Next100FieldCage gate_cathode_dist_
 GATE_WINDOW_DIST = 1458.8 - GRID_THICKNESS              # Next100.cc gate_sapphire_wdw_distance_
+EL_GAP = 10.0                                           # Next100FieldCage el_gap_length_
 PMT_WINDOW_DIAM = 80.0                                  # Next100EnergyPlane hole_diam_front_
 ACTIVE_DIAM = 983.3                                     # Next100FieldCage active_diam_
 TP_CENTRE = (3.7, 6.4)                                  # -Next100.cc fc_displ_x_, fc_displ_y_
@@ -150,6 +155,10 @@ def main():
              sensor_half_size=np.concatenate([np.full(n, half), np.full(m, PMT_WINDOW_DIAM / 2.0)]) / 1000.0,
              radius=RADIUS_MM / 1000.0,
              height=HEIGHT_MM / 1000.0,
+             gate_z=(HEIGHT_MM / 2 - SIPM_PLANE_BEHIND_GATE) / 1000.0,
+             el_gap_z=np.array([HEIGHT_MM / 2 - SIPM_PLANE_BEHIND_GATE + GRID_THICKNESS,
+                                HEIGHT_MM / 2 - SIPM_PLANE_BEHIND_GATE + GRID_THICKNESS + EL_GAP]) / 1000.0,
+             cathode_z=(HEIGHT_MM / 2 - SIPM_PLANE_BEHIND_GATE - GATE_CATHODE_DIST) / 1000.0,
              sensor_radius=half / 1000.0)
 
     print(f"wrote {out}")
