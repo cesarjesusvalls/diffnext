@@ -273,8 +273,11 @@ def setup_event_simulator(
     elif sim_config.use_expected_value is False:
         photon_update_fn = partial(photon_iteration_sample, reflection_fn=reflection_fn)
     else:
+        # Flat sensors deposit as a hard step, so depositing at the sensor's reflectance moves no
+        # forward value and gives the outer half of their straight-through gradient its weight.
         photon_update_fn = jax.remat(
-            make_photon_iteration_update_factors_safe(reflection_fn))
+            make_photon_iteration_update_factors_safe(
+                reflection_fn, deposit_as_sensor=det_geom.flat_sensors))
 
     # ---- Geometry bounds check (delegates to detector method) ----------------
     def get_inside_detector_flag(positions):

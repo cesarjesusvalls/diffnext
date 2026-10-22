@@ -159,7 +159,7 @@ def photon_iteration_update_factors(
         normal, scatter_length, mie_scatter_length, g, refl_params,
         absorption_length,
         hit_sensor, lam, rng_key, speed_of_light,
-        reflection_fn=scalar_reflection):
+        reflection_fn=scalar_reflection, deposit_as_sensor=False):
     """
     Expected-value ("implicit capture") photon update with DiCE score-function gradients.
 
@@ -194,6 +194,16 @@ def photon_iteration_update_factors(
         JAX PRNG key.
     speed_of_light : float
         Speed of light in the medium (m/ns).
+    deposit_as_sensor : bool
+        Deposit with the reflectance of a sensor at this incidence, wherever the photon
+        landed, instead of the reflectance of the surface it landed on. For sensors whose
+        deposit is a hard step (the flat-sensor model) the forward is unchanged, since a
+        photon off every sensor deposits nothing either way; what changes is the
+        straight-through gradient, whose outer half (photons just outside a sensor, which
+        land on the wall) would otherwise be scaled by ``1 - R_wall`` and so lose most of
+        the light that a move would bring onto the sensor. A soft overlap deposits off
+        the sensor in the forward too, so it keeps the default. A Python bool, resolved at
+        trace time.
 
     Returns
     -------
@@ -286,7 +296,11 @@ def photon_iteration_update_factors(
     # (the scan body multiplies it from PRE-step log_p).
     reach = jnp.exp(-mu_tot * Dd)
     atten_surf = jnp.exp(-Dd / absorption_length)
-    detect_prob = reach * (1.0 - refl_prob) * atten_surf
+    if deposit_as_sensor:
+        refl_deposit = reflection_fn(direction, normal, True, refl_params, lam, k[5])[0]
+    else:
+        refl_deposit = refl_prob
+    detect_prob = reach * (1.0 - refl_deposit) * atten_surf
     reflection_attenuation = jnp.ones_like(detect_prob)           # folded into detect_prob
     continuing_factor = jnp.where(is_scat, atten, refl_prob * atten)
 
@@ -312,8 +326,10 @@ def photon_iteration_update_factors(
 # custom_vjp signature stays fixed (refl_params is a single packed pytree arg) —
 # a new reflection model never reshapes _fwd/_bwd residuals or cotangents.
 
-def make_photon_iteration_update_factors_safe(reflection_fn=scalar_reflection):
-    """Build the expected-value step closed over ``reflection_fn`` (a static model choice).
+def make_photon_iteration_update_factors_safe(reflection_fn=scalar_reflection,
+                                              deposit_as_sensor=False):
+    """Build the expected-value step closed over ``reflection_fn`` and ``deposit_as_sensor``
+    (static model choices; see :func:`photon_iteration_update_factors`).
 
     Historically this wrapped the step in a ``jax.custom_vjp`` whose backward scrubbed
     NaN/Inf cotangents — a backstop for a sqrt-at-zero 0/0 in the surface-distance norm
@@ -335,7 +351,7 @@ def make_photon_iteration_update_factors_safe(reflection_fn=scalar_reflection):
             position, direction, time, surface_distance,
             normal, scatter_length, mie_scatter_length, g, refl_params,
             absorption_length, hit_sensor, lam, rng_key, speed_of_light,
-            reflection_fn=reflection_fn)
+            reflection_fn=reflection_fn, deposit_as_sensor=deposit_as_sensor)
 
     return _step
 

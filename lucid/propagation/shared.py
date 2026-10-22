@@ -255,6 +255,9 @@ def create_propagator(detector, sensor_positions, sensor_radius,
         surface (a square or a disc, each its own size), hit iff the photon's landing point
         falls inside it, so it collects ``area * cos(theta)``. Its deposit is always the hard
         step: ``temperature`` and the soft-overlap options apply to the spherical model only.
+        The expected-value photon step deposits on it at the sensor's reflectance wherever the
+        photon landed (``deposit_as_sensor``), which keeps the outer half of the step's
+        straight-through gradient.
         ``sensor_radius`` still sizes the cell assignment; sensors larger than that are found
         through the closest-sensor fallback, which :func:`validate_flat_sensor_coverage`
         checks at build time. A Python-level choice made at trace time, so the default graph

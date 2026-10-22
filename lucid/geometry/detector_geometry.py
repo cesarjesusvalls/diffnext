@@ -23,6 +23,7 @@ class DetectorGeometry(NamedTuple):
     medium: MediumProperties                    # material physics
     detector: object = None                     # the Detector instance
     propagator: Optional[Callable] = None       # JIT-compiled propagate_photons
+    flat_sensors: bool = False                  # sensors are flat pads with a hard-step deposit
 
     @staticmethod
     def from_config(json_filename: str,
@@ -132,4 +133,5 @@ class DetectorGeometry(NamedTuple):
             medium=medium,
             detector=detector,
             propagator=propagator,
+            flat_sensors=sensor_model is not None,
         )
