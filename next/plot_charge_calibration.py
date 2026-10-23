@@ -168,7 +168,7 @@ fig.text(0.05, 0.925, f"4 letters (166 deposits of 41.5 keV), {int(d['n_rays']) 
          + (f"Wall reflectivity R fitted as log(1 − R).  " if 'wall reflectivity' in names else '')
          + (f"EL gain against the truth's × {float(d['real_target'][i_gain] / d['real_true'][i_gain]):.4f}, "
             f"the light-weighted mean truth gain (that estimator's gauge).  " if loo and i_gain is not None else '')
-         + f"{draws(d, 'forward_draws')} forward and {draws(d, 'jacobian_draws')} Jacobian draws per step.  "
+         + f"{draws(d, 'forward_draws')} forward and {draws(d, 'jacobian_draws')} Jacobian draws per step.\n"
          + f"Pseudo-data keys {int(d['data_key']) if 'data_key' in d else 5000} + 131 b.  "
          f"Shaded: the last {polyak} steps, averaged for the fit.", ha='left', va='top', fontsize=9.5, color=INK2,
          linespacing=1.5)
