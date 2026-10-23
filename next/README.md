@@ -130,36 +130,56 @@ were four findings, each with its study in `studies/`:
   draws (`fixed_point_check.py`). Its gauge weights the gains by light (c = sum model / sum data),
   so its EL gain is the truth's times the light-weighted mean gain (1.019 here); the fit reports
   that as its target.
-- **The pseudo-data's random keys pull the fit.** Both second-round fits end at R +0.4% and EL
-  gain -3 to -4%. That is where the linearised fixed point puts any fit to this pseudo-data
-  (`data_noise_sets.py`, `predict_shift.py`: R +0.32%, EL gain -3.0% or -3.3% in the two gauges,
-  lifetime +0.9%). Fresh pseudo-data sets scatter the fit by 0.08% in R, 0.7-0.8% in EL gain
-  and 0.7% in lifetime, so this one is 4 standard deviations out.
-  `lucid.fitting.closure_data` draws the pseudo-data with keys 5000 + 131 b (+1000 per source).
-  All 8 of its draws pull R by +0.23% to +0.40%, while the single draws of 13 other key families,
-  including 4999, 5001, 5002 and 5007, scatter around zero with a standard deviation of about
-  0.2% (`key_check.py`, `key_families.py`, figure `key_family_figure.py`). The pull needs the
-  streams for the electrons' spread and emission depth and the propagation stream all from those
-  keys (`key_split_check.py`); its mechanism is not found. `--data-key` draws the pseudo-data from
-  other keys: for 20000 + 131 b the predicted shifts in B's gauge are R -0.03%, EL gain +0.3% and
-  lifetime -0.25%.
+- **Freeing R biases R and the EL gain together.** Every fit with R free settles near R +0.4%,
+  with the EL gain 3-5% low. Raising R puts light on every sensor and a lower EL gain takes it
+  back off: their correlation is 0.95 in LUCiD's gauge and 0.99 in the light-weighted one. The
+  charge-only fit, with R held at the truth, gets the EL gain to +0.6%. The same fit with only R
+  freed (no gain spread, LUCiD's charge term, D_T free) ends at R +0.41% and EL gain -2.7%. It
+  came down to there from R +1.5%, while fits B and C crept up to it from +0.1%: this is where
+  the fit settles, not where it stopped. The cause is open.
+
+  It is not the pseudo-data's random keys. `lucid.fitting.closure_data` draws the pseudo-data
+  with keys 5000 + 131 b (+1000 per source). In the linearised fixed point (`data_noise_sets.py`)
+  all 8 of those draws pull R by +0.23% to +0.40%, while the single draws of 13 other key
+  families scatter around zero with a standard deviation of about 0.2% (`key_check.py`,
+  `key_families.py`; `key_split_check.py` finds the pull needs the electron and the propagation
+  streams both from those keys). That map predicted fits A and B (`predict_shift.py`: R +0.32%,
+  EL gain -3.0% or -3.3% in the two gauges). But fit C, which is B on pseudo-data from keys
+  20000 + 131 b (`--data-key`), was predicted at R -0.03% and EL gain +0.3% and ends at R +0.48%
+  and EL gain -5.0% (figure `key_family_figure.py`). B and C share their model draws, so the
+  data alone moved the fit by +0.08% in R where the map said -0.35%: the linearised map does not
+  describe the fit along R and the EL gain. A candidate it cannot see: the Neyman weight,
+  1 / sqrt(Q), is nonlinear in the pseudo-data's own noise, a bias every pseudo-data set shares.
 
 Fitted / truth - 1 (Polyak mean of the last 10 of 60 steps, one RTX 2080 Ti):
 
-| | D_T held, absorption free | A: D_T / v held, no absorption, 16 draws | B: as A, leave-one-out, 4 draws |
-|---|---|---|---|
-| drift velocity | +0.06% | +0.001% | +0.002% |
-| electron lifetime | +0.12% | +0.62% | +0.74% |
-| longitudinal diffusion | +41% | +0.05% | +0.07% |
-| EL gain | -3.4% | -2.88% | -4.20% (against 1.019 x truth) |
-| wall reflectivity | -0.05% | +0.37% | +0.40% |
-| absorption length | +25% | | |
-| SiPM / PMT gains, rms | 10.9% / 0.26% | 9.8% / 0.24% | 9.8% / 0.24% |
-| time | 65 min | 2 h 12 min | 61 min |
+| | D_T held, absorption free | A: D_T / v held, no absorption, 16 draws | B: as A, leave-one-out, 4 draws | C: as B, pseudo-data keys 20000 |
+|---|---|---|---|---|
+| drift velocity | +0.06% | +0.001% | +0.002% | +0.002% |
+| electron lifetime | +0.12% | +0.62% | +0.74% | -0.21% |
+| longitudinal diffusion | +41% | +0.05% | +0.07% | +0.07% |
+| EL gain | -3.4% | -2.88% | -4.20% (against 1.019 x truth) | -4.96% (against 1.019 x truth) |
+| wall reflectivity | -0.05% | +0.37% | +0.40% | +0.48% |
+| absorption length | +25% | | | |
+| SiPM / PMT gains, rms | 10.9% / 0.26% | 9.8% / 0.24% | 9.8% / 0.24% | 9.7% / 0.26% |
+| time | 65 min | 2 h 12 min | 61 min | 61 min |
 
 The gains come back to the Monte-Carlo floor, the rms left with the parameters at the truth. For
 the PMTs that is 0.24%. The SiPMs are not constrained at all at 1M rays per letter: their floor,
 9.9%, is the 10% spread itself.
+
+R alone, added to the charge-only fit (4 forward and 8 Jacobian draws, 60 steps, no gain spread,
+LUCiD's charge term; D_T is not measured at this ray count):
+
+| | R held at the truth | R free |
+|---|---|---|
+| drift velocity | +0.003% | +0.002% |
+| electron lifetime | -0.05% | +0.27% |
+| transverse diffusion | -15% | -18% |
+| longitudinal diffusion | +0.22% | +0.16% |
+| EL gain | +0.59% | -2.73% |
+| wall reflectivity | | +0.41% |
+| time | 61 min | 65 min |
 
 ## Known gradient issues
 
@@ -267,9 +287,9 @@ $RUN next/studies/fixed_point_check.py $OUT/next_letters.npz $OUT/fixed_point_ch
 
 **The pseudo-data's keys.** This starts with the linearised fixed point, which gives the closure's
 statistical error and this pseudo-data's shift, both from 64 model draws (10 min). Then come
-single draws by key family, the streams that carry the pull, and the figure. Last are where the
-linearised fixed point puts each fit, the prediction for pseudo-data from keys 20000 + 131 b, and
-fit B on that pseudo-data (61 min).
+single draws by key family and the streams that carry the pull. Then the linearised fixed point
+predicts each fit and pseudo-data from keys 20000 + 131 b, and fit C runs fit B on that
+pseudo-data (61 min). The figure, which needs fit C, comes last.
 
 ```bash
 $RUN next/studies/data_noise_sets.py $OUT/next_letters.npz $OUT/data_noise_sets.npz --w-time 0.00707 \
@@ -277,11 +297,20 @@ $RUN next/studies/data_noise_sets.py $OUT/next_letters.npz $OUT/data_noise_sets.
 $RUN next/studies/key_check.py $OUT/next_letters.npz $OUT/data_noise_sets.npz $OUT/key_check.npz
 $RUN next/studies/key_families.py $OUT/next_letters.npz $OUT/data_noise_sets.npz $OUT/key_families.npz
 $RUN next/studies/key_split_check.py $OUT/next_letters.npz $OUT/data_noise_sets.npz
-python next/studies/key_family_figure.py $OUT $FIG/pseudo_data_keys
 $RUN next/studies/predict_shift.py $OUT/data_noise_sets.npz $OUT/joint_fit_16fwd.npz $OUT/joint_fit_loo.npz \
     --data-key 20000 --sample $OUT/next_letters.npz
 $RUN $C --mode fit $J2 --forward-draws 4 --estimator leave-one-out --data-key 20000 \
     --out $OUT/joint_fit_loo_k20000.npz
 python next/plot_charge_calibration.py $OUT/joint_fit_loo_k20000.npz $FIG/joint_fit_loo_k20000 \
     --ref $OUT/joint_fit_loo.npz --ref-label "fit B: pseudo-data keys 5000 + 131 b"
+python next/studies/key_family_figure.py $OUT $FIG/pseudo_data_keys
+```
+
+**R alone.** This is the charge-only fit above, with R freed and nothing else changed (65 min):
+
+```bash
+$RUN $C --mode fit --free v lifetime dt dl gain reflectivity --mu 1e-6 --forward-draws 4 \
+    --jacobian-draws 8 --refresh 4 --steps 60 --out $OUT/charge_fit_plus_r.npz
+python next/plot_charge_calibration.py $OUT/charge_fit_plus_r.npz $FIG/charge_fit_plus_r \
+    --ref $OUT/charge_fit_fixed.npz --ref-label "R held at the truth (the charge-only fit)"
 ```

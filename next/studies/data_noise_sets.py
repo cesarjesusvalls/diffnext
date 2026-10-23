@@ -1,5 +1,7 @@
 """How far does the pseudo-data's own Monte-Carlo noise move the fit, and did it move it there?
 
+To first order only: fit C (see predict_shift.py) does not end where this map puts it.
+
 The pseudo-data are 8 forward draws at the truth, so they differ from the noise-free model by dQ.
 To first order the fit's fixed point (Gauss-Newton with LUCiD's Jacobian, gains profiled, plus the
 noise-free waveform term) moves by d theta = L dQ, with

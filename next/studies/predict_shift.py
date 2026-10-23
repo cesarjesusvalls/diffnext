@@ -6,6 +6,9 @@ L: data_noise_sets.py's map (both gauges: LUCiD's log gauge, and LeaveOneOutProb
 light-weighted one), m: its 64-draw unit-gain model at the truth. +- what those 64 draws leave.
 Pseudo-data from saved fits (their `data`), or generated here with closure_data's keys.
 
+Fit C tested it: for keys 20000 + 131 b it predicts R -0.03% and EL gain +0.3%, and the fit ends
+at R +0.48% and EL gain -5.0%. Along R and the EL gain the map does not describe the fit.
+
   python predict_shift.py data_noise_sets.npz [fit.npz ...] [--data-key 20000 --sample next_letters.npz]
 """
 import argparse

@@ -1,7 +1,8 @@
 """Figure: the reflectivity pull of single forward draws, by the family of random keys they used.
 
-Reads key_check.npz, key_families.npz, data_noise_sets.npz and the fits joint_fit_16fwd.npz and
-joint_fit_loo.npz from <out dir>.
+The pull is the linearised fixed point's; fit C shows that the fits do not follow it. Reads
+key_check.npz, key_families.npz, data_noise_sets.npz and the fits joint_fit_16fwd.npz,
+joint_fit_loo.npz and joint_fit_loo_k20000.npz from <out dir>.
 
   python key_family_figure.py <out dir> <figure stem>
 """
@@ -13,7 +14,8 @@ import matplotlib.pyplot as plt
 
 out, stem = sys.argv[1], sys.argv[2]
 kc, kf, ns = (np.load(f'{out}/{f}.npz') for f in ('key_check', 'key_families', 'data_noise_sets'))
-fit_a, fit_b = np.load(f'{out}/joint_fit_16fwd.npz'), np.load(f'{out}/joint_fit_loo.npz')
+fit_a, fit_b, fit_c = (np.load(f'{out}/{f}.npz') for f in ('joint_fit_16fwd', 'joint_fit_loo',
+                                                             'joint_fit_loo_k20000'))
 
 # the 64 draws of the reference family, each against the mean of all 64
 names = [str(n) for n in ns['names']]
@@ -35,7 +37,7 @@ BLUE, ORANGE = '#2a78d6', '#eb6834'
 plt.rcParams.update({'font.size': 10, 'text.color': INK, 'axes.labelcolor': INK2, 'axes.edgecolor': LINE,
                      'xtick.color': INK2, 'ytick.color': MUTED})
 fig, ax = plt.subplots(figsize=(14, 5.8), dpi=130)
-fig.subplots_adjust(left=0.07, right=0.72, top=0.80, bottom=0.16)
+fig.subplots_adjust(left=0.07, right=0.72, top=0.76, bottom=0.16)
 sd = ref64.std(ddof=1)
 ax.axhspan(-sd, sd, color=GRID, alpha=0.6, lw=0, zorder=0)
 ax.axhline(0, color=MUTED, lw=1.0, zorder=1)
@@ -57,13 +59,14 @@ for s in ('top', 'right'):
     ax.spines[s].set_visible(False)
 
 # where the fits ended, at the right
-R_a = float(fit_a['real_fit'][list(map(str, fit_a['names'])).index('wall reflectivity')] / 0.94 - 1) * 100
-R_b = float(fit_b['real_fit'][list(map(str, fit_b['names'])).index('wall reflectivity')] / 0.94 - 1) * 100
+R_fit = lambda f: float(f['real_fit'][list(map(str, f['names'])).index('wall reflectivity')] / 0.94 - 1) * 100
+R_a, R_b, R_c = R_fit(fit_a), R_fit(fit_b), R_fit(fit_c)
 pd_mean = float(np.mean(cols[0][1]))
 xr = len(cols) - 0.4
 labels = sorted(((pd_mean, f'pseudo-data, mean of its 8 draws: {pd_mean:+.2f}%', ORANGE),
                  (R_a, f'where fit A ended (LUCiD, 16 draws): {R_a:+.2f}%', INK2),
-                 (R_b, f'where fit B ended (leave-one-out, 4 draws): {R_b:+.2f}%', INK2)), key=lambda t: t[0])
+                 (R_b, f'where fit B ended (leave-one-out, 4 draws): {R_b:+.2f}%', INK2),
+                 (R_c, f'where fit C ended (B on keys 20000): {R_c:+.2f}%', INK2)), key=lambda t: t[0])
 y_text = [labels[0][0] - 0.06]
 for y, _, _ in labels[1:]:
     y_text.append(max(y, y_text[-1] + 0.06))
@@ -74,11 +77,12 @@ ax.text(xr + 0.5, -sd, f'shaded: ±1 sd of a single draw ({sd:.2f}%)', va='cente
         clip_on=False)
 ax.set_ylim(-0.55, 0.55)
 
-fig.text(0.07, 0.955, "The pseudo-data's random keys pull the wall reflectivity", fontsize=14,
-         fontweight='semibold', ha='left', va='top')
+fig.text(0.07, 0.955, "The pseudo-data's keys stand out in the linearised fixed point, but the fits do not "
+         "follow it", fontsize=14, fontweight='semibold', ha='left', va='top')
 fig.text(0.07, 0.895, "Each dot: one forward draw at the truth (1M rays per letter), projected on the shift of R the "
          "closure fit would make if it were the pseudo-data\n(linearised fixed point of the fit, LUCiD gauge). "
-         "lucid.fitting.closure_data draws with keys 5000 + 131 b. Bars: family means.",
+         "lucid.fitting.closure_data draws with keys 5000 + 131 b. Bars: family means.\n"
+         "Fit C, on pseudo-data from keys 20000 + 131 b (predicted -0.03%), ends beside fits A and B.",
          fontsize=9.5, color=INK2, ha='left', va='top', linespacing=1.45)
 fig.savefig(f'{stem}.png', dpi=130)
 fig.savefig(f'{stem}.pdf')
